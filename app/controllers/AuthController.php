@@ -3,6 +3,8 @@ class AuthController
 {
     public function login()
     {
+        $error = null;
+
         if ($_POST) {
             $user = trim($_POST['user'] ?? '');
             $pass = $_POST['pass'] ?? '';
@@ -47,9 +49,11 @@ class AuthController
                 return;
             }
 
-            echo "Login inválido";
+            $error = 'Login inválido.';
         }
 
-        Render::view('login');
+        Render::view('login', [
+            'error' => $error,
+        ]);
     }
 }
