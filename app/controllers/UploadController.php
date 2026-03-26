@@ -33,6 +33,7 @@ class UploadController
         }
 
         if (!empty($_FILES['fiscal']['tmp_name']) && is_uploaded_file($_FILES['fiscal']['tmp_name'])) {
+            $this->ensureXmlInvoiceReaderLoaded();
             $xmlInvoiceReader = new XmlInvoiceReader();
             $fiscalDocuments = $xmlInvoiceReader->read($_FILES['fiscal']['tmp_name'], $_FILES['fiscal']['name'] ?? '');
         }
@@ -118,5 +119,14 @@ class UploadController
         }
 
         return $message;
+    }
+
+    private function ensureXmlInvoiceReaderLoaded()
+    {
+        if (class_exists('XmlInvoiceReader', false)) {
+            return;
+        }
+
+        require_once dirname(__DIR__) . '/services/XmlInvoiceReader.php';
     }
 }

@@ -70,9 +70,18 @@ class XlsxReader
         $items = $xml->xpath('//main:si');
         $strings = [];
 
+        if ($items === false) {
+            return [];
+        }
+
         foreach ($items as $item) {
-            $textNodes = $item->xpath('.//main:t');
+            $textNodes = $item->xpath(".//*[local-name()='t']");
             $text = '';
+
+            if ($textNodes === false) {
+                $strings[] = $text;
+                continue;
+            }
 
             foreach ($textNodes as $textNode) {
                 $text .= (string) $textNode;
