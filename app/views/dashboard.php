@@ -60,18 +60,28 @@
 
             <section class="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
                 <div class="rounded-[2rem] border border-white/70 bg-white/85 p-7 shadow-soft backdrop-blur">
-                    <h2 class="text-2xl font-semibold text-stone-800">Importar planilha</h2>
+                    <h2 class="text-2xl font-semibold text-stone-800">Importar arquivos</h2>
                     <p class="mt-2 text-sm leading-6 text-stone-500">
-                        Envie um arquivo com os consumos e os dados dos assinantes para montar as NFCom.
+                        Use o XML como base fiscal da nota e a planilha para complementar o detalhamento de consumo.
                     </p>
 
                     <form method="POST" action="<?php echo htmlspecialchars(url('/upload')); ?>" enctype="multipart/form-data" class="mt-8 space-y-5">
                         <div class="rounded-3xl border border-dashed border-rosewood/25 bg-ice px-5 py-8 text-center">
-                            <p class="text-sm font-medium text-clay">Selecione um arquivo CSV ou XLSX</p>
+                            <p class="text-sm font-medium text-clay">Planilha de detalhamento (CSV ou XLSX)</p>
                             <input
                                 type="file"
-                                name="csv"
+                                name="spreadsheet"
                                 accept=".csv,.xlsx"
+                                class="mx-auto mt-4 block w-full max-w-sm rounded-2xl border border-stone-200 bg-white px-4 py-3 text-sm text-stone-600 file:mr-4 file:rounded-xl file:border-0 file:bg-rosewood file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-[#9e4040]"
+                            >
+                        </div>
+
+                        <div class="rounded-3xl border border-dashed border-rosewood/25 bg-ice px-5 py-8 text-center">
+                            <p class="text-sm font-medium text-clay">Arquivo fiscal (XML ou ZIP com XMLs)</p>
+                            <input
+                                type="file"
+                                name="fiscal"
+                                accept=".xml,.zip"
                                 class="mx-auto mt-4 block w-full max-w-sm rounded-2xl border border-stone-200 bg-white px-4 py-3 text-sm text-stone-600 file:mr-4 file:rounded-xl file:border-0 file:bg-rosewood file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-[#9e4040]"
                             >
                         </div>
@@ -100,7 +110,9 @@
                                     <thead class="bg-stone-50 text-left text-xs uppercase tracking-[0.18em] text-stone-500">
                                         <tr>
                                             <th class="px-4 py-4">Cliente</th>
+                                            <th class="px-4 py-4">Nota</th>
                                             <th class="px-4 py-4">Documento</th>
+                                            <th class="px-4 py-4">Base</th>
                                             <th class="px-4 py-4 text-center">Linhas</th>
                                             <th class="px-4 py-4 text-right">Total</th>
                                             <th class="px-4 py-4 text-center">Ação</th>
@@ -112,7 +124,9 @@
                                                 <td class="px-4 py-4">
                                                     <p class="font-semibold text-stone-800"><?php echo htmlspecialchars($invoice['recipient_name'] ?? ''); ?></p>
                                                 </td>
+                                                <td class="px-4 py-4 text-stone-600"><?php echo htmlspecialchars((string) ($invoice['invoice_number'] ?? '')); ?></td>
                                                 <td class="px-4 py-4 text-stone-600"><?php echo htmlspecialchars($invoice['recipient_document'] ?? ''); ?></td>
+                                                <td class="px-4 py-4 text-stone-600"><?php echo htmlspecialchars($invoice['match_status_label'] ?? 'Planilha'); ?></td>
                                                 <td class="px-4 py-4 text-center text-stone-600"><?php echo htmlspecialchars((string) ($invoice['summary']['count'] ?? 0)); ?></td>
                                                 <td class="px-4 py-4 text-right font-semibold text-rosewood">
                                                     R$ <?php echo htmlspecialchars(number_format((float) ($invoice['summary']['total_amount'] ?? 0), 2, ',', '.')); ?>

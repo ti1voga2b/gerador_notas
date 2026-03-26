@@ -2,6 +2,17 @@
 
 class NfcomService
 {
+    public function buildInvoices($rows, $fiscalDocuments = [])
+    {
+        $spreadsheetInvoices = $this->groupInvoices($rows);
+
+        if (empty($spreadsheetInvoices)) {
+            $spreadsheetInvoices = $this->buildInvoicesFromFiscalDocuments($fiscalDocuments);
+        }
+
+        return $this->mergeFiscalData($spreadsheetInvoices, $fiscalDocuments);
+    }
+
     public function groupInvoices($rows)
     {
         $groups = [];
@@ -146,6 +157,39 @@ class NfcomService
         return str_pad((string) ((int) substr(md5($document), 0, 8)), 9, '0', STR_PAD_LEFT);
     }
 
+    private function buildInvoicesFromFiscalDocuments($fiscalDocuments)
+    {
+        $invoices = [];
+
+        foreach ($fiscalDocuments as $document) {
+            $recipientDocument = preg_replace('/\D/', '', (string) ($document['recipient_document'] ?? ''));
+            $recipientName = trim((string) ($document['recipient_name'] ?? ''));
+            $groupKey = md5($recipientDocument . '|' . $recipientName . '|' . ($document['access_key'] ?? ''));
+
+            $invoices[] = [
+                'key' => $groupKey,
+                'recipient_name' => $recipientName,
+                'recipient_document' => $recipientDocument,
+                'lines' => [],
+                'summary' => [
+                    'count' => 0,
+                    'total_amount' => (float) ($document['total_amount'] ?? 0),
+                    'total_internet_gb' => 0.0,
+                    'total_zero_rating_gb' => 0.0,
+                    'total_telefonia_min' => 0.0,
+                    'total_sms' => 0.0,
+                ],
+                'invoice_number' => trim((string) ($document['invoice_number'] ?? '')) ?: $this->buildInvoiceNumber($recipientDocument),
+                'access_key' => preg_replace('/\D/', '', (string) ($document['access_key'] ?? '')),
+                'match_status' => 'xml_only',
+                'match_status_label' => 'Somente XML',
+                'fiscal_source' => 'XML',
+            ];
+        }
+
+        return $invoices;
+    }
+
     private function buildAccessKey($invoice)
     {
         $issuerCnpj = preg_replace('/\D/', '', (string) ($_ENV['NF_ISSUER_CNPJ'] ?? '34490277000161'));
@@ -155,13 +199,102 @@ class NfcomService
         return substr(str_pad($seed, 44, '0'), 0, 44);
     }
 
+    private function mergeFiscalData($invoices, $fiscalDocuments)
+    {
+        if (empty($invoices)) {
+            return [];
+        }
+
+        $fiscalByDocument = [];
+        $matchedDocuments = [];
+
+        foreach ($fiscalDocuments as $document) {
+            $recipientDocument = preg_replace('/\D/', '', (string) ($document['recipient_document'] ?? ''));
+
+            if ($recipientDocument === '' || isset($fiscalByDocument[$recipientDocument])) {
+                continue;
+            }
+
+            $fiscalByDocument[$recipientDocument] = $document;
+        }
+
+        foreach ($invoices as &$invoice) {
+            $document = preg_replace('/\D/', '', (string) ($invoice['recipient_document'] ?? ''));
+            $fiscal = $fiscalByDocument[$document] ?? null;
+
+            if ($fiscal === null) {
+                $invoice['match_status'] = $invoice['match_status'] ?? 'spreadsheet_only';
+                $invoice['match_status_label'] = $invoice['match_status_label'] ?? 'Somente planilha';
+                $invoice['fiscal_source'] = $invoice['fiscal_source'] ?? 'Planilha';
+                continue;
+            }
+
+            $invoice['recipient_name'] = trim((string) ($fiscal['recipient_name'] ?? '')) ?: $invoice['recipient_name'];
+            $invoice['invoice_number'] = trim((string) ($fiscal['invoice_number'] ?? '')) ?: $invoice['invoice_number'];
+            $invoice['access_key'] = preg_replace('/\D/', '', (string) ($fiscal['access_key'] ?? '')) ?: $invoice['access_key'];
+            $invoice['issuer_name'] = trim((string) ($fiscal['issuer_name'] ?? ''));
+            $invoice['issuer_document'] = preg_replace('/\D/', '', (string) ($fiscal['issuer_document'] ?? ''));
+            $invoice['issuer_ie'] = trim((string) ($fiscal['issuer_ie'] ?? ''));
+            $invoice['series'] = trim((string) ($fiscal['series'] ?? ''));
+            $invoice['model'] = trim((string) ($fiscal['model'] ?? ''));
+            $invoice['issued_at'] = trim((string) ($fiscal['issued_at'] ?? ''));
+            $invoice['fiscal_total_amount'] = (float) ($fiscal['total_amount'] ?? 0);
+            $invoice['match_status'] = empty($invoice['lines']) ? 'xml_only' : 'matched';
+            $invoice['match_status_label'] = empty($invoice['lines']) ? 'Somente XML' : 'XML + planilha';
+            $invoice['fiscal_source'] = empty($invoice['lines']) ? 'XML' : 'Conciliado';
+            $matchedDocuments[$document] = true;
+
+            if (empty($invoice['lines']) && $invoice['fiscal_total_amount'] > 0) {
+                $invoice['summary']['total_amount'] = $invoice['fiscal_total_amount'];
+            }
+        }
+
+        unset($invoice);
+
+        foreach ($fiscalByDocument as $document => $fiscal) {
+            if (isset($matchedDocuments[$document])) {
+                continue;
+            }
+
+            $invoices[] = [
+                'key' => md5($document . '|' . ($fiscal['access_key'] ?? '')),
+                'recipient_name' => trim((string) ($fiscal['recipient_name'] ?? '')),
+                'recipient_document' => $document,
+                'lines' => [],
+                'summary' => [
+                    'count' => 0,
+                    'total_amount' => (float) ($fiscal['total_amount'] ?? 0),
+                    'total_internet_gb' => 0.0,
+                    'total_zero_rating_gb' => 0.0,
+                    'total_telefonia_min' => 0.0,
+                    'total_sms' => 0.0,
+                ],
+                'invoice_number' => trim((string) ($fiscal['invoice_number'] ?? '')) ?: $this->buildInvoiceNumber($document),
+                'access_key' => preg_replace('/\D/', '', (string) ($fiscal['access_key'] ?? '')),
+                'issuer_name' => trim((string) ($fiscal['issuer_name'] ?? '')),
+                'issuer_document' => preg_replace('/\D/', '', (string) ($fiscal['issuer_document'] ?? '')),
+                'issuer_ie' => trim((string) ($fiscal['issuer_ie'] ?? '')),
+                'series' => trim((string) ($fiscal['series'] ?? '')),
+                'model' => trim((string) ($fiscal['model'] ?? '')),
+                'issued_at' => trim((string) ($fiscal['issued_at'] ?? '')),
+                'fiscal_total_amount' => (float) ($fiscal['total_amount'] ?? 0),
+                'match_status' => 'xml_only',
+                'match_status_label' => 'Somente XML',
+                'fiscal_source' => 'XML',
+            ];
+        }
+
+        return $invoices;
+    }
+
     private function renderHeader($pdf, $invoice)
     {
-        $issuerName = $_ENV['NF_ISSUER_NAME'] ?? 'VOGA INOVACOES TECNOLOGICAS LTDA';
-        $issuerCnpj = $_ENV['NF_ISSUER_CNPJ'] ?? '34.490.277/0001-61';
-        $issuerIe = $_ENV['NF_ISSUER_IE'] ?? '490.458.900-54';
-        $model = $_ENV['NF_MODEL'] ?? '62';
-        $series = $_ENV['NF_SERIE'] ?? '1';
+        $issuerName = $invoice['issuer_name'] ?? ($_ENV['NF_ISSUER_NAME'] ?? 'VOGA INOVACOES TECNOLOGICAS LTDA');
+        $issuerCnpj = $invoice['issuer_document'] ?? ($_ENV['NF_ISSUER_CNPJ'] ?? '34.490.277/0001-61');
+        $issuerIe = $invoice['issuer_ie'] ?? ($_ENV['NF_ISSUER_IE'] ?? '490.458.900-54');
+        $model = $invoice['model'] ?? ($_ENV['NF_MODEL'] ?? '62');
+        $series = $invoice['series'] ?? ($_ENV['NF_SERIE'] ?? '1');
+        $issuedAt = $this->formatIssuedAt($invoice['issued_at'] ?? '');
 
         $pdf->SetFont('Arial', 'B', 14);
         $pdf->Cell(120, 8, $pdf->encode($issuerName), 0, 0, 'L');
@@ -169,10 +302,10 @@ class NfcomService
         $pdf->Cell(70, 8, $pdf->encode('NFCom'), 0, 1, 'R');
 
         $pdf->SetFont('Arial', '', 10);
-        $pdf->Cell(95, 6, $pdf->encode('CNPJ: ' . $issuerCnpj), 0, 0, 'L');
+        $pdf->Cell(95, 6, $pdf->encode('CNPJ: ' . $this->formatDocument($issuerCnpj)), 0, 0, 'L');
         $pdf->Cell(95, 6, $pdf->encode('Modelo ' . $model . ' | Serie ' . $series . ' | N ' . $invoice['invoice_number']), 0, 1, 'R');
         $pdf->Cell(95, 6, $pdf->encode('IE: ' . $issuerIe), 0, 0, 'L');
-        $pdf->Cell(95, 6, $pdf->encode('Emissao: ' . date('d/m/Y H:i')), 0, 1, 'R');
+        $pdf->Cell(95, 6, $pdf->encode('Emissao: ' . $issuedAt), 0, 1, 'R');
         $pdf->Ln(2);
 
         $pdf->SetFont('Arial', 'B', 9);
@@ -258,6 +391,10 @@ class NfcomService
     {
         $digits = preg_replace('/\D/', '', (string) $document);
 
+        if (strlen($digits) === 11) {
+            return substr($digits, 0, 3) . '.' . substr($digits, 3, 3) . '.' . substr($digits, 6, 3) . '-' . substr($digits, 9, 2);
+        }
+
         if (strlen($digits) !== 14) {
             return $document;
         }
@@ -284,6 +421,21 @@ class NfcomService
         }
 
         return substr($text, 0, $length - 3) . '...';
+    }
+
+    private function formatIssuedAt($value)
+    {
+        $value = trim((string) $value);
+
+        if ($value === '') {
+            return date('d/m/Y H:i');
+        }
+
+        try {
+            return (new DateTime($value))->format('d/m/Y H:i');
+        } catch (Exception $exception) {
+            return $value;
+        }
     }
 }
 

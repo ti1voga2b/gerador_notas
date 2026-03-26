@@ -22,22 +22,33 @@ class UploadController
             exit;
         }
 
-        $message = 'Selecione um arquivo CSV ou XLSX valido.';
+        $message = 'Selecione uma planilha CSV/XLSX, um XML/ZIP fiscal, ou envie ambos.';
         $rows = [];
         $invoices = [];
+        $fiscalDocuments = [];
 
-        if (!empty($_FILES['csv']['tmp_name']) && is_uploaded_file($_FILES['csv']['tmp_name'])) {
+        if (!empty($_FILES['spreadsheet']['tmp_name']) && is_uploaded_file($_FILES['spreadsheet']['tmp_name'])) {
             $spreadsheetReader = new SpreadsheetReader();
-            $rows = $spreadsheetReader->read($_FILES['csv']['tmp_name'], $_FILES['csv']['name'] ?? '');
+            $rows = $spreadsheetReader->read($_FILES['spreadsheet']['tmp_name'], $_FILES['spreadsheet']['name'] ?? '');
+        }
 
-            if (empty($rows)) {
-                $message = 'Arquivo enviado, mas nenhuma linha valida foi encontrada.';
+        if (!empty($_FILES['fiscal']['tmp_name']) && is_uploaded_file($_FILES['fiscal']['tmp_name'])) {
+            $xmlInvoiceReader = new XmlInvoiceReader();
+            $fiscalDocuments = $xmlInvoiceReader->read($_FILES['fiscal']['tmp_name'], $_FILES['fiscal']['name'] ?? '');
+        }
+
+        if (empty($rows) && empty($fiscalDocuments)) {
+            unset($_SESSION['invoices']);
+        } else {
+            $nfcomService = new NfcomService();
+            $invoices = $nfcomService->buildInvoices($rows, $fiscalDocuments);
+
+            if (empty($invoices)) {
+                $message = 'Os arquivos foram enviados, mas nenhuma NFCom valida foi identificada.';
                 unset($_SESSION['invoices']);
             } else {
-                $nfcomService = new NfcomService();
-                $invoices = $nfcomService->groupInvoices($rows);
                 $_SESSION['invoices'] = $invoices;
-                $message = 'Arquivo processado com sucesso. Escolha abaixo a NFCom que deseja baixar.';
+                $message = $this->buildUploadMessage($rows, $fiscalDocuments, $invoices);
             }
         }
 
@@ -77,5 +88,35 @@ class UploadController
 
         http_response_code(404);
         echo 'NFCom nao encontrada.';
+    }
+
+    private function buildUploadMessage($rows, $fiscalDocuments, $invoices)
+    {
+        $parts = [];
+
+        if (!empty($rows)) {
+            $parts[] = count($rows) . ' linhas de planilha';
+        }
+
+        if (!empty($fiscalDocuments)) {
+            $parts[] = count($fiscalDocuments) . ' XML fiscais';
+        }
+
+        $matchedCount = 0;
+
+        foreach ($invoices as $invoice) {
+            if (($invoice['match_status'] ?? '') === 'matched') {
+                $matchedCount++;
+            }
+        }
+
+        $message = 'Arquivos processados: ' . implode(' e ', $parts) . '. ';
+        $message .= count($invoices) . ' notas prontas para consulta.';
+
+        if ($matchedCount > 0) {
+            $message .= ' ' . $matchedCount . ' notas foram conciliadas com XML + planilha.';
+        }
+
+        return $message;
     }
 }
