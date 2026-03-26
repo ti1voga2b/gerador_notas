@@ -10,6 +10,7 @@ $router = new Router();
 
 $router->get('/', 'AuthController@login');
 $router->post('/', 'AuthController@login');
+$router->get('/logout', 'AuthController@logout');
 
 $router->get('/dashboard', 'UploadController@index');
 $router->post('/upload', 'UploadController@upload');

@@ -46,9 +46,18 @@
                     </p>
                 </div>
 
-                <div class="rounded-3xl bg-rosewood/8 px-5 py-4 text-sm text-clay">
-                    <p class="font-semibold text-rosewood"><?php echo htmlspecialchars((string) count($invoices ?? [])); ?> notas prontas</p>
-                    <p class="mt-1">CSV e XLSX suportados.</p>
+                <div class="flex flex-col items-start gap-3 lg:items-end">
+                    <div class="rounded-3xl bg-rosewood/8 px-5 py-4 text-sm text-clay">
+                        <p class="font-semibold text-rosewood"><?php echo htmlspecialchars((string) count($invoices ?? [])); ?> notas prontas</p>
+                        <p class="mt-1">CSV, XLSX, XML e ZIP suportados.</p>
+                    </div>
+
+                    <a
+                        href="<?php echo htmlspecialchars(url('/logout')); ?>"
+                        class="inline-flex rounded-2xl border border-rosewood/20 bg-white px-4 py-2 text-sm font-semibold text-rosewood transition hover:border-rosewood/35 hover:bg-rosewood/5"
+                    >
+                        Sair
+                    </a>
                 </div>
             </section>
 
