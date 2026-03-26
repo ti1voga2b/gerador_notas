@@ -32,7 +32,16 @@ class AuthController
                     header('Location: ' . url('/dashboard'));
                     exit;
                 }
-            } catch (PDOException $exception) {
+            } catch (Throwable $exception) {
+                error_log(sprintf(
+                    '[database] %s | host=%s port=%s db=%s user=%s',
+                    $exception->getMessage(),
+                    $_ENV['DB_HOST'] ?? '',
+                    $_ENV['DB_PORT'] ?? '',
+                    $_ENV['DB_NAME'] ?? '',
+                    $_ENV['DB_USER'] ?? ''
+                ));
+
                 http_response_code(500);
                 echo 'Erro ao conectar com o banco de dados.';
                 return;

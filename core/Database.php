@@ -11,6 +11,10 @@ class Database
         $pass = $_ENV['DB_PASS'] ?? '';
         $charset = $_ENV['DB_CHARSET'] ?? 'utf8mb4';
 
+        if ($name === '' || $user === '') {
+            throw new RuntimeException('Configuracao de banco incompleta no .env.');
+        }
+
         $dsn = "mysql:host={$host};port={$port};dbname={$name};charset={$charset}";
 
         return new PDO($dsn, $user, $pass, [
